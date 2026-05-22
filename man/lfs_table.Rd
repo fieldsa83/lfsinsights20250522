@@ -82,7 +82,7 @@ lfs_table(
 
 \item{north}{Whether to include north data (default: FALSE).}
 
-\item{add_labels}{Whether to apply labels (default: FALSE).}
+\item{add_labels}{Whether to apply labels (default: TRUE).}
 
 \item{language}{Language for labels, "EN" or "FR" (default: "EN").}
 

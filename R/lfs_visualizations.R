@@ -46,7 +46,7 @@
 #' )
 #' }
 #'
-#' @importFrom plotly plot_ly layout %>%
+#' @importFrom plotly plot_ly layout
 #' @importFrom stats as.formula
 #' @export
 lfs_plotly_line <- function(
@@ -221,7 +221,7 @@ lfs_plotly_line <- function(
 #' )
 #' }
 #'
-#' @importFrom plotly plot_ly layout %>%
+#' @importFrom plotly plot_ly layout
 #' @importFrom stats as.formula
 #' @export
 lfs_plotly_bar <- function(

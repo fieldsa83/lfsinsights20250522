@@ -50,5 +50,10 @@ at a time to avoid excessive memory usage.
 \author{
 \strong{Maintainer}: Andrew Fields \email{andrew.fields@statcan.gc.ca}
 
+Authors:
+\itemize{
+  \item Andrew Fields \email{andrew.fields@statcan.gc.ca}
+}
+
 }
 \keyword{internal}

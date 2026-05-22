@@ -107,8 +107,11 @@ calculate_ratio <- function(data, is_percent = TRUE, decimals = 1, weight_var = 
 #' Calculate period-over-period changes for specified columns
 #'
 #' @param data Data frame containing time series data
-#' @param analysis_vars  Character vector of grouping variables
+#' @param analysis_vars Character vector of grouping variables
+#' @param weight_var Base weight variable name (e.g. `"FINALWT"`)
+#' @param est_type Type of estimate: `"sum"` or `"ratio"`
 #' @param lag_period Number of periods to lag
+#' @param is_percent Logical. Whether the estimate is already a percentage; if TRUE for a ratio, the `_pct_change` column is omitted to avoid percent-of-a-percent.
 #' @param calculate_percent Whether to calculate percent change
 #' @return Data frame with added change columns
 #' @export
@@ -177,134 +180,120 @@ calculate_change <- function(data, analysis_vars, weight_var, est_type, lag_peri
 }
 
 
-#' Calculate the difference between comparison categories for the comparison variable
+#' Calculate the difference between two comparison categories
 #'
-#' @param data Data frame containing time series data
-#' @param analysis_vars Character vector of grouping variables (e.g., "GENDER")
-#' @param weight_var Character scalar used to form the ratio column names (e.g., "supp_weight")
-#' @param est_type Type of estimate, ratio or ratio_distribution
-#' @param estimate List with various parameters
-#' @param comparison_variable Name of the variable to compare (e.g., "GENDER")
-#' @param comparison_categories string of categories to compare (e.g., "1,2")
-#'
-#' @return A data frame:
-#'   - If `comparison_variable` is NULL: original rows with `<measure>_change` and optionally `<measure>_pct_change`.
-#'   - If `comparison_variable` is set: one row per DATE + other groups (excluding `comparison_variable`),
-#'     with `<weight_var>_ratio_pp_diff` and `BW_..._ratio_pp_diff` for all bootstrap replicates.
+#' @param data Data frame produced by the estimate post-processing pipeline.
+#' @param analysis_vars Character vector of grouping variables (e.g. `c("PROV", "GENDER")`).
+#' @param weight_var Base weight variable name (e.g. `"FINALWT"`).
+#' @param comparison_variable Column whose two categories are to be contrasted.
+#'   Must be an element of `analysis_vars`.
+#' @param comparison_categories Two-element vector (numeric, integer, or character)
+#'   identifying the categories.  Category 1 minus category 2 is computed.
+#'   Also accepts a comma-separated string (e.g. `"1,2"`).
+#' @return A data frame with one row per DATE + remaining groups, containing
+#'   `*_diff` columns for all numeric estimate columns and `*_ctgry1` /
+#'   `*_ctgry2` columns for the ratio, numerator, denominator, and suppression
+#'   flag columns.
 #' @export
 calculate_difference <- function(
   data,
   analysis_vars,
   weight_var,
-  est_type,
-  estimate,
-  comparison_variable = NULL,
-  comparison_categories = NULL
+  comparison_variable,
+  comparison_categories
 ) {
-  stopifnot(est_type %in% c("ratio", "ratio_distribution"))
-  if (is.null(estimate$ratio_numerator) || !nzchar(estimate$ratio_numerator)) {
-    cli::cli_abort("For proportions, {.field estimate$ratio_numerator} must be supplied.")
+  # ── Input validation ────────────────────────────────────────────────────────
+  if (is.null(comparison_variable) || !nzchar(comparison_variable)) {
+    cli::cli_abort("{.field comparison_variable} must be supplied.")
   }
-  if (!is.null(comparison_variable)) {
-    if (!(comparison_variable %in% analysis_vars)) {
-      cli::cli_abort("{.field comparison_variable} must be one of {.field analysis_vars}.")
-    }
+  if (!(comparison_variable %in% analysis_vars)) {
+    cli::cli_abort(
+      "{.field comparison_variable} ({.val {comparison_variable}}) must be one of {.field analysis_vars}."
+    )
   }
-    .lfs_sub("Calculating differences")
 
-  #Converts string input for comparison categories to numeric vector
-  comparison_categories <- comparison_categories %>%
-    str_replace_all("[[:space:]]+", "") %>% 
-    str_replace_all("\"", "") %>% 
-    str_split(",", simplify = TRUE) %>% 
-    as.numeric()
+  # Parse categories — handles "1,2", c("1","2"), c(1L,2L), c(1,2)
+  cats <- strsplit(
+    gsub('[[:space:]]|"', "", paste(comparison_categories, collapse = ",")), ","
+  )[[1]]
+  if (length(cats) != 2) {
+    cli::cli_abort(
+      "{.field comparison_categories} must contain exactly 2 categories, got {length(cats)}."
+    )
+  }
 
-  # Ratio columns
   prop_col <- paste0(weight_var, "_ratio")
   if (!(prop_col %in% names(data))) {
-    cli::cli_abort("Expected ratio column {.val {prop_col}} not found in {.field data}.")
+    cli::cli_abort(
+      "Expected ratio column {.val {prop_col}} not found. Is this a ratio estimate?"
+    )
   }
 
-  # -----------------------
-  # Cross-category contrast 
-  # -----------------------
-  ctgry1 <- comparison_categories[1]
-  ctgry2 <- comparison_categories[2]
+  .lfs_sub("Calculating differences")
 
-  # Keep only the two levels to be contrasted
-  data <- data %>%
-    dplyr::filter(.data[[comparison_variable]] %in% comparison_categories)
+  cat1 <- cats[1]
+  cat2 <- cats[2]
 
-  # Identify columns to calculate difference for
-  group_vars <- analysis_vars
-  if ("DATE" %in% names(data)) group_vars <- c(group_vars, "DATE")
-  if ("Moving_avg" %in% names(data)) group_vars <- c(group_vars, "Moving_avg")
-  if ("estimate_name" %in% names(data)) group_vars <- c(group_vars, "estimate_name")
-  if ("est_type" %in% names(data)) group_vars <- c(group_vars, "est_type")
-   
-  # remove the categorical variable
-  group_vars_no_cat <- group_vars <- setdiff(group_vars, comparison_variable)
+  # ── Column sets ─────────────────────────────────────────────────────────────
+  # Groups: DATE + analysis_vars minus the comparison variable + any metadata cols
+  group_vars <- c(
+    "DATE",
+    setdiff(analysis_vars, comparison_variable),
+    intersect(c("Moving_avg", "estimate_name", "est_type"), names(data))
+  )
 
-  # Identify columns to calculate difference for
-  diff_cols <- names(data)[!names(data) %in% c("DATE", "Moving_avg", group_vars, comparison_variable)]
-  diff_cols <- diff_cols[!grepl("_suppress$", diff_cols)]
-  diff_cols <- diff_cols[!grepl("_num$", diff_cols)]
-  diff_cols <- diff_cols[!grepl("_den$", diff_cols)]
+  # Carry cols: main ratio/num/den and suppression flags — shown as ctgry1/ctgry2
+  num_col       <- paste0(weight_var, "_num")
+  den_col       <- paste0(weight_var, "_den")
+  suppress_cols <- grep("_suppress$", names(data), value = TRUE)
+  carry_cols    <- intersect(c(prop_col, num_col, den_col, suppress_cols), names(data))
 
-  # Get names of columns for numerator and denominator
-  num_col <- paste0(weight_var, "_num")
-  den_col <- paste0(weight_var, "_den")
+  # Diff cols: all remaining numeric columns (ratio, change, bootstrap, etc.)
+  # Excludes group vars, comparison variable, and num/den/suppress
+  diff_cols <- names(data)[
+    !names(data) %in% c(group_vars, comparison_variable) &
+    !grepl("_num$|_den$|_suppress$", names(data)) &
+    vapply(data, is.numeric, logical(1))
+  ]
 
-  # Make a list of columns we want to keep for both ctgry1 and ctgry2
-  suppress_cols <- grep("suppress$", names(data), value = TRUE)
-  cols_to_carry <- intersect(c(prop_col, num_col, den_col, suppress_cols), names(data))  # only carry if present
+  # ── Filter to the two categories ────────────────────────────────────────────
+  data <- dplyr::filter(data, as.character(.data[[comparison_variable]]) %in% cats)
 
-  # calculate difference
-  data <- data %>%
-    group_by(across(all_of(group_vars_no_cat))) %>%
-      # keep rounded ratios, numerators, and denominators for ctgry1 and ctgry2
-      summarise(
-        across(all_of(cols_to_carry),
-        ~ {
-          comp <- .data[[comparison_variable]]
-          v1 <- .x[comp == ctgry1]
-          if (length(v1) == 0L) NA_real_ else v1[1L]
-        },
+  # ── Summarise ───────────────────────────────────────────────────────────────
+  result <- data %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_vars))) %>%
+    dplyr::summarise(
+      dplyr::across(
+        dplyr::all_of(carry_cols),
+        ~ { v <- .x[as.character(.data[[comparison_variable]]) == cat1]
+            if (length(v) == 0L) NA_real_ else v[1L] },
         .names = "{.col}_ctgry1"
       ),
       dplyr::across(
-        dplyr::all_of(cols_to_carry),
-        ~ {
-          comp <- .data[[comparison_variable]]
-          v2 <- .x[comp == ctgry2]
-          if (length(v2) == 0L) NA_real_ else v2[1L]
-        },
+        dplyr::all_of(carry_cols),
+        ~ { v <- .x[as.character(.data[[comparison_variable]]) == cat2]
+            if (length(v) == 0L) NA_real_ else v[1L] },
         .names = "{.col}_ctgry2"
       ),
-
-        #calculate difference
-        across(all_of(diff_cols),  
-          ~ {
-            v    <- .x
-            comp <- .data[[comparison_variable]]
-            v1   <- v[comp == ctgry1]
-            v2   <- v[comp == ctgry2]
-            if (length(v1) == 0L || length(v2) == 0L) NA_real_ else (v1[1L] - v2[1L])
-          },
-          .names = "{.col}_diff"
+      dplyr::across(
+        dplyr::all_of(diff_cols),
+        ~ { v1 <- .x[as.character(.data[[comparison_variable]]) == cat1]
+            v2 <- .x[as.character(.data[[comparison_variable]]) == cat2]
+            if (length(v1) == 0L || length(v2) == 0L) NA_real_ else v1[1L] - v2[1L] },
+        .names = "{.col}_diff"
       ),
-     .groups = "drop"
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      comparison_categories = paste0(comparison_variable, ": ", cat1, " vs. ", cat2)
+    ) %>%
+    dplyr::select(
+      dplyr::all_of(group_vars), comparison_categories,
+      dplyr::any_of(paste0(prop_col, "_diff")),
+      dplyr::everything()
     )
-      
-  #Create variable with information on what variable/values were compared
-  comp_label <- paste0("Comparison category 1: ", comparison_variable, "=", ctgry1, " vs. Comparison category 2: ", comparison_variable, "=", ctgry2)
-  
-  # add this variable, drop some unnecessary variables, and reorder
-  data <- data %>%
-    dplyr::mutate(comparison_categories = comp_label) %>%
-    dplyr::select(group_vars_no_cat, comparison_categories, paste0(prop_col, "_diff"), everything())
 
-  return(data)
+  result
 }
   
   
@@ -436,7 +425,6 @@ calculate_moving_avg <- function(data, group_vars, value_cols, periods, filter_m
 #' @importFrom tidyr complete nesting
 #' @importFrom rlang syms
 #' @importFrom stats setNames
-#' @importFrom utils str
 #' @importFrom lubridate is.Date
 #'
 #' @export
@@ -614,6 +602,8 @@ calculate_bootstrap_variance <- function(data, est_type, weight_var, is_change =
     dplyr::mutate(
       # A. Bootstrap Standard Deviation (SD)
       # Formula: sqrt( (N-1)/N * sum((x_i - mean)^2) ) -> approximated by var() logic
+      # Alternative to review (StatCan LFS methodology — centers on full-weight estimate, not bootstrap mean):
+      #   sqrt(mean((c_across(all_of(bw_vars)) - .data[[main_var_to_use]])^2, na.rm = TRUE))
       bs_sd = sqrt(((length(bw_vars) - 1) *
                       stats::var(dplyr::c_across(dplyr::all_of(bw_vars)), na.rm = TRUE) /
                       length(bw_vars))),

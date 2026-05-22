@@ -10,7 +10,6 @@ open_custom_dvs()
 None
 }
 \description{
-Opens the \code{custom_dvs.R} file in the user's default text editor.
-If running in RStudio, it will open in the RStudio source editor.
+Opens the \code{custom_dvs.R} file for editing.
 If the file doesn't exist, it will be created with default content.
 }

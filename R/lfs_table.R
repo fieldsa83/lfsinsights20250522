@@ -27,7 +27,7 @@
 #' @param supplement_lmsi Whether to include LMSI (quarterly) supplement data (default: FALSE).
 #' @param supplement_dlmi Whether to include DLMI (annual disability) supplement data (default: FALSE).
 #' @param north Whether to include north data (default: FALSE).
-#' @param add_labels Whether to apply labels (default: FALSE).
+#' @param add_labels Whether to apply labels (default: TRUE).
 #' @param language Language for labels, "EN" or "FR" (default: "EN").
 #' @param weight_rounding Numeric factor for rounding estimate levels, including sum, numerator, and denominator (default: 100).
 #' @param include_marginals Logical. Whether to include marginal totals (default: TRUE).

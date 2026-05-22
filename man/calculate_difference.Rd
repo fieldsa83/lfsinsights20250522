@@ -2,41 +2,36 @@
 % Please edit documentation in R/math_and_helper_functions.R
 \name{calculate_difference}
 \alias{calculate_difference}
-\title{Calculate the difference between comparison categories for the comparison variable}
+\title{Calculate the difference between two comparison categories}
 \usage{
 calculate_difference(
   data,
   analysis_vars,
   weight_var,
-  est_type,
-  estimate,
-  comparison_variable = NULL,
-  comparison_categories = NULL
+  comparison_variable,
+  comparison_categories
 )
 }
 \arguments{
-\item{data}{Data frame containing time series data}
+\item{data}{Data frame produced by the estimate post-processing pipeline.}
 
-\item{analysis_vars}{Character vector of grouping variables (e.g., "GENDER")}
+\item{analysis_vars}{Character vector of grouping variables (e.g. \code{c("PROV", "GENDER")}).}
 
-\item{weight_var}{Character scalar used to form the ratio column names (e.g., "supp_weight")}
+\item{weight_var}{Base weight variable name (e.g. \code{"FINALWT"}).}
 
-\item{est_type}{Type of estimate, ratio or ratio_distribution}
+\item{comparison_variable}{Column whose two categories are to be contrasted.
+Must be an element of \code{analysis_vars}.}
 
-\item{estimate}{List with various parameters}
-
-\item{comparison_variable}{Name of the variable to compare (e.g., "GENDER")}
-
-\item{comparison_categories}{string of categories to compare (e.g., "1,2")}
+\item{comparison_categories}{Two-element vector (numeric, integer, or character)
+identifying the categories.  Category 1 minus category 2 is computed.
+Also accepts a comma-separated string (e.g. \code{"1,2"}).}
 }
 \value{
-A data frame:
-\itemize{
-\item If \code{comparison_variable} is NULL: original rows with \verb{<measure>_change} and optionally \verb{<measure>_pct_change}.
-\item If \code{comparison_variable} is set: one row per DATE + other groups (excluding \code{comparison_variable}),
-with \verb{<weight_var>_ratio_pp_diff} and \code{BW_..._ratio_pp_diff} for all bootstrap replicates.
-}
+A data frame with one row per DATE + remaining groups, containing
+\verb{*_diff} columns for all numeric estimate columns and \verb{*_ctgry1} /
+\verb{*_ctgry2} columns for the ratio, numerator, denominator, and suppression
+flag columns.
 }
 \description{
-Calculate the difference between comparison categories for the comparison variable
+Calculate the difference between two comparison categories
 }

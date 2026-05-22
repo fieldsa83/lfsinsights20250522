@@ -19,7 +19,13 @@ calculate_change(
 
 \item{analysis_vars}{Character vector of grouping variables}
 
+\item{weight_var}{Base weight variable name (e.g. \code{"FINALWT"})}
+
+\item{est_type}{Type of estimate: \code{"sum"} or \code{"ratio"}}
+
 \item{lag_period}{Number of periods to lag}
+
+\item{is_percent}{Logical. Whether the estimate is already a percentage; if TRUE for a ratio, the \verb{_pct_change} column is omitted to avoid percent-of-a-percent.}
 
 \item{calculate_percent}{Whether to calculate percent change}
 }
