@@ -1,4 +1,4 @@
-#' @importFrom vroom vroom_fwf fwf_widths
+#' @importFrom readr read_fwf fwf_widths
 #' @importFrom haven read_sas
 #' @importFrom dplyr filter mutate select rename_with starts_with %>%
 #' @keywords internal
@@ -30,11 +30,11 @@ load_tabs_data <- function(current_date, use_prerelease = FALSE, lfs_config_list
   tabs_layout <- get_config("tabs_layout")
 
   # Read in PRN fixed-weight-file according to the tabs layout
-  data <- vroom::vroom_fwf(
+  data <- readr::read_fwf(
     file_path,
-    vroom::fwf_widths(tabs_layout$Length, tabs_layout$Name),
+    readr::fwf_widths(tabs_layout$Length, tabs_layout$Name),
     col_types = paste(substr(tabs_layout$FORMAT, 1, 1), collapse = ""),
-    .name_repair = "minimal"
+    name_repair = "minimal"
   )
   # Determine decimal scaling if specified in layout (ie HRLYEARN, HRS, etc)
   decimal_vars <- tabs_layout[tabs_layout$Decimals > 0 & tabs_layout$Name %in% names(data), ]
@@ -137,11 +137,11 @@ load_north_data <- function(current_date, use_prerelease = FALSE, lfs_config_lis
     # Read in TXT fixed-width-file according to the tabs layout
     tryCatch(
       {
-        data <- vroom::vroom_fwf(
+        data <- readr::read_fwf(
           file_path,
-          vroom::fwf_widths(tabs_layout$Length, tabs_layout$Name),
+          readr::fwf_widths(tabs_layout$Length, tabs_layout$Name),
           col_types = paste(substr(tabs_layout$FORMAT, 1, 1), collapse = ""),
-          .name_repair = "minimal"
+          name_repair = "minimal"
         )
 
         # Add territory identifier and store in list

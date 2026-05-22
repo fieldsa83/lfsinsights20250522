@@ -14,7 +14,7 @@ Imports:
     rlang,
     tibble,
     zoo,
-    vroom,
+    readr,
     haven,
     jsonlite,
     stats,
